@@ -224,14 +224,6 @@ int main() {
 // }
 
 FireResult Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int difficulty, int x, int y, SmokeScreen smokes[], int activeSmokeCount) {
-    // Check if the cell is covered by an active smoke screen
-    for (int i = 0; i < activeSmokeCount; i++) {
-        if (x >= smokes[i].x && x < smokes[i].x + 2 && y >= smokes[i].y && y < smokes[i].y + 2) {
-            printf("No information available due to smoke.");
-            return INVALID;  // Smoke-covered area, opponent cannot get information
-        }
-    }
-
     // Validate if coordinates are within grid boundaries
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
         return INVALID;  // Invalid coordinates
@@ -324,6 +316,7 @@ RadarResult RadarSweep(char grid[GRID_SIZE][GRID_SIZE], int difficulty, int x, i
 }
 
 SmokeScreenResult DeploySmokeScreen(SmokeScreen smokes[], int *activeSmokeCount, int x, int y) {
+
     // Check if the player has available smoke screens to deploy
     if (*activeSmokeCount >= 2) {
         printf("Maximum smoke screens deployed. Cannot deploy more.\n");
