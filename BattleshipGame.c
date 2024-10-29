@@ -26,6 +26,17 @@ typedef struct {
     int shipsDestroyed;
 } Fleet;
 
+// Smoke Screen structure to define a smoke screen effect with coordinates and duration
+typedef struct {
+    int x, y;           // Top-left coordinate of the 2x2 smoke-covered area
+    int turnsRemaining; // Number of turns left for the smoke screen to be active
+} SmokeScreen;
+
+
+typedef enum { MISS, HIT, SUNK, INVALID } FireResult;
+typedef enum { NO_ENEMY, ENEMY_FOUND, INVALID_RADAR } RadarResult;
+typedef enum { SUCCESS, FAILURE, INVALID_COORDINATES, MAX_SMOKE_REACHED } SmokeScreenResult;
+
 // Function prototypes
 void initGrid(char grid[GRID_SIZE][GRID_SIZE]);
 void printGrid(char grid[GRID_SIZE][GRID_SIZE]);
@@ -33,7 +44,13 @@ void initializeFleet(Fleet *fleet);
 int placeShip(char grid[GRID_SIZE][GRID_SIZE], Ship *ship, int x, int y, int orientation);
 void displayGrids(int turn, char grid1[GRID_SIZE][GRID_SIZE], char grid2[GRID_SIZE][GRID_SIZE], char grid1for2[GRID_SIZE][GRID_SIZE], char grid2for1[GRID_SIZE][GRID_SIZE]);
 int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]);
-void Fire(char grid[GRID_SIZE][GRID_SIZE],int difficulty, int x,int y);
+FireResult Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int difficulty, int x, int y, SmokeScreen smokes[], int activeSmokeCount);
+Ship* getShipByType(Fleet *fleet, char shipType);
+const char* getShipNameByType(char type);
+RadarResult RadarSweep(char grid[GRID_SIZE][GRID_SIZE], int difficulty, int x, int y, int *radarUses, SmokeScreen smokes[], int activeSmokeCount);
+SmokeScreenResult DeploySmokeScreen(SmokeScreen smokes[], int *activeSmokeCount, int x, int y);
+void UpdateSmokeScreens(SmokeScreen smokes[], int *activeSmokeCount);
+
 
 int main() {
     char grid1[GRID_SIZE][GRID_SIZE];
@@ -173,10 +190,10 @@ int main() {
         } while (!isValidCommand(command, pos, row,oppositeGrid));
         col = pos - 'A';
         printf("%c",&oppositeGrid[row][col]);
-        if( strcmp(command,"Fire")==0 ) {
-            printf("Firing!\n");
-            Fire(oppositeGrid,1,row,col);
-        }
+        // if( strcmp(command,"Fire")==0 ) {
+        //     printf("Firing!\n");
+        //     Fire(oppositeGrid,1,row,col);
+        // }
 
 
         
@@ -191,20 +208,185 @@ int main() {
     return 0;
 }
 
-void Fire(char grid[GRID_SIZE][GRID_SIZE],int difficulty, int x,int y){
-    if(difficulty == 1){
-        if(grid[x][y] == '~'){
-            grid[x][y] = 'm';
-            printf("Missed!\n");
-        }else{
-            grid[x][y] = 'h';
-            printf("Hit!\n");
-        }
-    }else{
+// void Fire(char grid[GRID_SIZE][GRID_SIZE],int difficulty, int x,int y){
+//     if(difficulty == 1){
+//         if(grid[x][y] == '~'){
+//             grid[x][y] = 'm';
+//             printf("Missed!\n");
+//         }else{
+//             grid[x][y] = 'h';
+//             printf("Hit!\n");
+//         }
+//     }else{
 
+//     }
+
+// }
+
+FireResult Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int difficulty, int x, int y, SmokeScreen smokes[], int activeSmokeCount) {
+    // Check if the cell is covered by an active smoke screen
+    for (int i = 0; i < activeSmokeCount; i++) {
+        if (x >= smokes[i].x && x < smokes[i].x + 2 && y >= smokes[i].y && y < smokes[i].y + 2) {
+            printf("No information available due to smoke.");
+            return INVALID;  // Smoke-covered area, opponent cannot get information
+        }
     }
 
+    // Validate if coordinates are within grid boundaries
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
+        return INVALID;  // Invalid coordinates
+    }
+
+    // Check if the cell has already been targeted
+    if (grid[x][y] == 'h' || grid[x][y] == 'm') {
+        if (difficulty == 1) { // Easy mode
+            printf("You've already targeted this spot. Try again.");
+            return INVALID;  // Prompt the player to try again
+            } else if (difficulty == 2) { // Hard mode
+            printf("You've already targeted this spot. You lose your turn.");
+            return MISS;  // Player loses the turn
+        }
+    }
+
+    // Determine if the target is a hit or miss
+    if (grid[x][y] != '~' && grid[x][y] != 'h' && grid[x][y] != 'm') {
+        // It's a hit
+        printf("Hit!");
+        char shipType = grid[x][y];
+        grid[x][y] = 'h';  // Mark the cell as hit
+
+        // Update the ship's hits count in the opponent's fleet
+        Ship *hitShip = getShipByType(opponentFleet, shipType);
+        if (hitShip == NULL) return INVALID;  // In case of an unexpected value
+
+        hitShip->hits++;
+
+        // Check if the ship is sunk
+        if (hitShip->hits == hitShip->size) {
+            printf("%s has been sunk!", getShipNameByType(shipType));
+            opponentFleet->shipsDestroyed++;
+            return SUNK;
+        }
+        return HIT;
+    } else {
+        // It's a miss
+        printf("Missed!");
+        if (difficulty == 1) { // In easy mode, mark misses
+            grid[x][y] = 'm';
+        }
+        return MISS;
+    }
 }
+       
+
+RadarResult RadarSweep(char grid[GRID_SIZE][GRID_SIZE], int difficulty, int x, int y, int *radarUses, SmokeScreen smokes[], int activeSmokeCount) {
+    // Check if the radar is being used in an area covered by smoke
+    for (int i = 0; i < activeSmokeCount; i++) {
+        if (x >= smokes[i].x && x < smokes[i].x + 2 && y >= smokes[i].y && y < smokes[i].y + 2) {
+            printf("No enemy ships found (due to smoke).\n");
+            return NO_ENEMY;  // Radar sweep blocked by smoke
+        }
+    }
+    // Check if radar uses exceed the limit
+    if (*radarUses >= 3) {
+        printf("No more radar sweeps available. You've used all your attempts.\n");
+        return INVALID_RADAR;  // Exceeds radar use limit
+    }
+
+    // Validate that the top-left coordinate is within bounds for a 2x2 area
+    if (x < 0 || x >= GRID_SIZE - 1 || y < 0 || y >= GRID_SIZE - 1) {
+        printf("Invalid coordinates for radar sweep. Please try again.\n");
+        return INVALID_RADAR;  // Area exceeds grid bounds
+    }
+
+    // Perform the radar sweep over the 2x2 area
+    int enemyFound = 0;
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            char cell = grid[x + i][y + j];
+            if (cell != '~' && cell != 'h' && cell != 'm') {
+                enemyFound = 1;  // A ship is present in the area
+            }
+        }
+    }
+
+    // Increment radar uses for the player
+    (*radarUses)++;
+
+    // Output results based on difficulty and presence of ships
+    if (enemyFound) {
+        printf("Enemy ships found.\n");
+        return ENEMY_FOUND;
+    } else {
+        printf("No enemy ships found.\n");
+        return NO_ENEMY;
+    }
+}
+
+SmokeScreenResult DeploySmokeScreen(SmokeScreen smokes[], int *activeSmokeCount, int x, int y) {
+    // Check if the player has available smoke screens to deploy
+    if (*activeSmokeCount >= 2) {
+        printf("Maximum smoke screens deployed. Cannot deploy more.\n");
+        return MAX_SMOKE_REACHED;
+    }
+
+    // Validate that the 2x2 area is within bounds
+    if (x < 0 || x >= GRID_SIZE - 1 || y < 0 || y >= GRID_SIZE - 1) {
+        printf("Invalid coordinates for smoke screen deployment. Please try again.\n");
+        return INVALID_COORDINATES;
+    }
+
+    // Deploy smoke screen
+    smokes[*activeSmokeCount].x = x;
+    smokes[*activeSmokeCount].y = y;
+    smokes[*activeSmokeCount].turnsRemaining = 3; // Set duration to 3 turns
+    (*activeSmokeCount)++;
+
+    printf("Smoke screen deployed at %c%d.\n", 'A' + y, x + 1);
+    return SUCCESS;
+}
+
+void UpdateSmokeScreens(SmokeScreen smokes[], int *activeSmokeCount) {
+    for (int i = 0; i < *activeSmokeCount; i++) {
+        smokes[i].turnsRemaining--;
+        if (smokes[i].turnsRemaining <= 0) {
+            // Remove expired smoke screen
+            printf("Smoke screen at %c%d has expired.\n", 'A' + smokes[i].y, smokes[i].x + 1);
+            // Shift remaining smoke screens to fill the gap
+            for (int j = i; j < *activeSmokeCount - 1; j++) {
+                smokes[j] = smokes[j + 1];
+            }
+            (*activeSmokeCount)--;
+            i--; // Adjust index due to removal
+        }
+    }
+}
+
+// Helper function to find the ship by type
+Ship* getShipByType(Fleet *fleet, char shipType) {
+    switch (shipType) {
+        case 'C': return &fleet->carrier;
+        case 'B': return &fleet->battleship;
+        case 'c': return &fleet->cruiser;
+        case 's': return &fleet->submarine;
+        case 'd': return &fleet->destroyer;
+        default: return NULL;  // Invalid ship type
+    }
+}
+
+// Helper function to find the name of the ship based on type
+const char* getShipNameByType(char type) {
+    switch (type) {
+        case 'C': return "Carrier";
+        case 'B': return "Battleship";
+        case 'c': return "Cruiser";
+        case 's': return "Submarine";
+        case 'd': return "Destroyer";
+        default: return "Unknown Ship";
+    }
+}
+
+
 
 // used for checking if a command is right
 int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]) {
