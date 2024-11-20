@@ -33,7 +33,7 @@ void initializeFleet(Fleet *fleet);
 int placeShip(char grid[GRID_SIZE][GRID_SIZE], Ship *ship, int x, int y, int orientation);
 void displayGrids(int turn, char grid1[GRID_SIZE][GRID_SIZE], char grid2[GRID_SIZE][GRID_SIZE], char grid1for2[GRID_SIZE][GRID_SIZE], char grid2for1[GRID_SIZE][GRID_SIZE]);
 int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]);
-void Fire(char grid[GRID_SIZE][GRID_SIZE],int difficulty, int x,int y);
+void Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, int x, int y);
 
 int main() {
     char grid1[GRID_SIZE][GRID_SIZE];
@@ -144,10 +144,11 @@ int main() {
     srand(time(NULL));
     
     int turn = rand() % 2 + 1;
-    char* command;
-    char pos;
-    int col,row; 
     while(fleet1.shipsDestroyed != 5 && fleet2.shipsDestroyed != 5){
+        char command[16];
+        char pos;
+        int col,row; 
+        
         char (*grid)[GRID_SIZE];
         char (*oppositeGrid)[GRID_SIZE];
         if (turn == 1) {
@@ -157,11 +158,11 @@ int main() {
             grid = grid2;
             oppositeGrid = grid1;
         }
-
+ 
 
 
         printf("Player %d to move:\n",turn);
-        fleet1.shipsDestroyed++;
+        Fleet *opponentFleet = turn == 1 ? &fleet2 : &fleet1;
         //displayGrids(turn, grid1, grid2, grid1for2, grid2for1);
 
         do { // Checking if command is correct
@@ -175,15 +176,22 @@ int main() {
         printf("%c",&oppositeGrid[row][col]);
         if( strcmp(command,"Fire")==0 ) {
             printf("Firing!\n");
-            Fire(oppositeGrid,1,row,col);
+            Fire(oppositeGrid, opponentFleet, row - 1, col);
+            
         }
 
 
-        
-        
+        // switch turns
         if(turn==1){
             turn=2;
         }else{turn=1;}
+
+
+         if (fleet1.shipsDestroyed == 5) {
+        printf("Player 2 wins!\n");
+        } else if (fleet2.shipsDestroyed == 5) {
+            printf("Player 1 wins!\n");
+        }
     }
 
     displayGrids(2, grid1, grid2, grid1for2, grid2for1);
@@ -191,20 +199,62 @@ int main() {
     return 0;
 }
 
-void Fire(char grid[GRID_SIZE][GRID_SIZE],int difficulty, int x,int y){
-    if(difficulty == 1){
-        if(grid[x][y] == '~'){
-            grid[x][y] = 'm';
-            printf("Missed!\n");
-        }else{
-            grid[x][y] = 'h';
-            printf("Hit!\n");
-        }
-    }else{
+void Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, int x, int y) {
+    if (grid[x][y] == '~') {
+        grid[x][y] = 'm';
+        printf("Missed!\n");
+    } else if (grid[x][y] != 'm' && grid[x][y] != 'h') {
+        char shipType = grid[x][y];
+        grid[x][y] = 'h';
+        printf("Hit!\n");
 
+        switch (shipType) {
+            case 'C': fleet->carrier.hits++; if (fleet->carrier.hits == fleet->carrier.size) fleet->shipsDestroyed++; break;
+            case 'B': fleet->battleship.hits++; if (fleet->battleship.hits == fleet->battleship.size) fleet->shipsDestroyed++; break;
+            case 'c': fleet->cruiser.hits++; if (fleet->cruiser.hits == fleet->cruiser.size) fleet->shipsDestroyed++; break;
+            case 's': fleet->submarine.hits++; if (fleet->submarine.hits == fleet->submarine.size) fleet->shipsDestroyed++; break;
+            case 'd': fleet->destroyer.hits++; if (fleet->destroyer.hits == fleet->destroyer.size) fleet->shipsDestroyed++; break;
+        }
+    } else {
+        printf("Already fired here!\n");
     }
 
 }
+
+// int checkAndDestroyShip(char grid[10][10], Fleet *fleet) {
+//     int destroyedCount = 0; // Tracks the number of ships destroyed during this call
+
+//     for (int i = 0; i < 5; i++) {
+//         Ship *ship = &fleet->ships[i];
+        
+//         if (ship->) {
+//             // Skip already destroyed ships
+//             continue;
+//         }
+
+//         // Check each part of the ship
+//         for (int j = 0; j < ship->length; j++) {
+//             int row = ship->isHorizontal ? ship->startRow : ship->startRow + j;
+//             int col = ship->isHorizontal ? ship->startCol + j : ship->startCol;
+
+//             // Count hits ('X') on the ship
+//             if (grid[row][col] == 'X') {
+//                 ship->hitCount++;
+//             }
+//         }
+
+//         // Destroy the ship if all parts are hit
+//         if (ship->hitCount == ship->length) {
+//             ship->isDestroyed = true;  // Mark as destroyed
+//             fleet->shipsDestroyed++;  // Increment the total destroyed counter
+//             destroyedCount++;         // Increment the local counter
+//         }
+//     }
+
+//     return destroyedCount; // Return the number of ships destroyed
+// }
+
+
 
 // used for checking if a command is right
 int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]) {
@@ -323,3 +373,24 @@ void displayGrids(int turn, char grid1[GRID_SIZE][GRID_SIZE], char grid2[GRID_SI
         printGrid(grid1for2);
     }
 }
+
+
+
+// int checkAndDestroyShip(Fleet *fleet) {
+//     int destroyedCount = 0;
+
+//     // Array of all ships in the fleet for easy iteration
+//     Ship *ships[] = {&fleet->carrier, &fleet->battleship, &fleet->cruiser, &fleet->submarine, &fleet->destroyer};
+
+//     for (int i = 0; i < 5; i++) {
+//         Ship *ship = ships[i];
+
+//         // Check if the ship has been destroyed
+//         if (ship->hits == ship->size) {
+//             fleet->shipsDestroyed++;  // Increment destroyed ships count
+//             destroyedCount++;         // Increment this turn's destroyed count
+//             ship->hits = -1;          // Mark as destroyed (prevents re-incrementing)
+//         }
+//     }
+//     return destroyedCount; // Return the number of ships destroyed this turn
+// }
