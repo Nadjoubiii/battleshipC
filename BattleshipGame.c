@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
+#include <ctype.h>
 
 #define GRID_SIZE 10
 
@@ -20,10 +21,11 @@ typedef struct {
 typedef struct {
     Ship carrier;
     Ship battleship;
-    Ship cruiser;
-    Ship submarine;
     Ship destroyer;
+    Ship submarine;
     int shipsDestroyed;
+    int hasArtillery;
+    int hasTorpedo;
 } Fleet;
 
 // Smoke Screen structure to define a smoke screen effect with coordinates and duration
@@ -34,6 +36,8 @@ typedef struct {
 
 
 typedef enum { MISS, HIT, SUNK, INVALID } FireResult;
+typedef enum { ARTILLERY_MISS, ARTILLERY_HIT, ARTILLERY_SUNK, ARTILLERY_INVALID } ArtilleryResult;
+typedef enum { TORPEDO_MISS, TORPEDO_HIT, TORPEDO_SUNK, TORPEDO_INVALID } TorpedoResult;
 typedef enum { NO_ENEMY, ENEMY_FOUND, INVALID_RADAR } RadarResult;
 typedef enum { SUCCESS, FAILURE, INVALID_COORDINATES, MAX_SMOKE_REACHED } SmokeScreenResult;
 
@@ -43,14 +47,19 @@ void printGrid(char grid[GRID_SIZE][GRID_SIZE]);
 void initializeFleet(Fleet *fleet);
 int placeShip(char grid[GRID_SIZE][GRID_SIZE], Ship *ship, int x, int y, int orientation);
 void displayGrids(int turn, char grid1[GRID_SIZE][GRID_SIZE], char grid2[GRID_SIZE][GRID_SIZE], char grid1for2[GRID_SIZE][GRID_SIZE], char grid2for1[GRID_SIZE][GRID_SIZE]);
-int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]);
-FireResult Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int difficulty, int x, int y, SmokeScreen smokes[], int activeSmokeCount);
+int isValidCommand(const char *command, char pos, int row, char grid[GRID_SIZE][GRID_SIZE]);
+FireResult Fire(char opponentGrid[GRID_SIZE][GRID_SIZE], char viewGrid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, Fleet *currentFleet, int x, int y);
+ArtilleryResult Artillery(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int x, int y);
+TorpedoResult Torpedo(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, char rowOrCol);
 Ship* getShipByType(Fleet *fleet, char shipType);
 const char* getShipNameByType(char type);
 RadarResult RadarSweep(char grid[GRID_SIZE][GRID_SIZE], int difficulty, int x, int y, int *radarUses, SmokeScreen smokes[], int activeSmokeCount);
 SmokeScreenResult DeploySmokeScreen(SmokeScreen smokes[], int *activeSmokeCount, int x, int y);
 void UpdateSmokeScreens(SmokeScreen smokes[], int *activeSmokeCount);
+Ship* getShipByType(Fleet *fleet, char shipType);
+void clearScreen();
 
+char currentPlayerName[20], opponentPlayerName[20];
 
 int main() {
     char grid1[GRID_SIZE][GRID_SIZE];
@@ -75,201 +84,252 @@ int main() {
     char shipType;
     Ship *ship;
     
-    printf("Enter ship type (C for Carrier, B for Battleship, c for Cruiser, s for Submarine, d for Destroyer), coordinates (row and column), and orientation (0 for horizontal, 1 for vertical):\n");
+    printf("Enter ship type (C for Carrier, B for Battleship, D for Destroyer, S for Submarine), coordinates (row and column), and orientation (0 for horizontal, 1 for vertical):\n");
 
 
-    /* This is working but mothballed for testing purpoeses */
-    // for (int i = 0; i < 5; i++) {  // 5 ships per player
-    //     printf("Place a ship (e.g., C 3 4 0 for Carrier at row 3, column 4, horizontal): ");
-    //     scanf(" %c %d %d %d", &shipType, &x, &y, &orientation);
-    //     x--;  // Convert to 0-based index
-    //     y--;
+    for (int i = 0; i < 4; i++) {  // 4 ships per player
+        printf("Place a ship (e.g., C 3 4 0 for Carrier at row 3, column 4, horizontal): ");
+        scanf(" %c %d %d %d", &shipType, &x, &y, &orientation);
+        x--;  // Convert to 0-based index
+        y--;
 
-    //     // Determine which ship to place
-    //     switch (shipType) {
-    //         case 'C': ship = &fleet1.carrier; break;
-    //         case 'B': ship = &fleet1.battleship; break;
-    //         case 'c': ship = &fleet1.cruiser; break;
-    //         case 's': ship = &fleet1.submarine; break;
-    //         case 'd': ship = &fleet1.destroyer; break;
-    //         default: 
-    //             printf("Invalid ship type. Try again.\n");
-    //             i--;  // Repeat this step
-    //             continue;
-    //     }
+        // Determine which ship to place
+        switch (shipType) {
+            case 'C': ship = &fleet1.carrier; break;
+            case 'B': ship = &fleet1.battleship; break;
+            case 'D': ship = &fleet1.destroyer; break;
+            case 'S': ship = &fleet1.submarine; break;
+            default:
+            printf("Invalid ship type. Try again.\n");
+            i--;  // Repeat this step
+            continue;
+            
+        }
 
-    //     // Place the ship and check for valid placement
-    //     if (placeShip(grid1, ship, x, y, orientation) == 0) {
-    //         printf("Ship placed successfully.\n");
-    //         printGrid(grid1);
-    //     } else {
-    //         printf("Invalid placement. Try again.\n");
-    //         i--;  // Repeat this step
-    //     }
-    // }
-//    for(int i = 0; i<5; i++ ){
-//         placedShips[i] = 'N';
-//     }
-    // printf("Player 2:\n");
-    // for (int i = 0; i < 5; i++) {  // 5 ships per player
-    //     printf("Place a ship (e.g., C 3 4 0 for Carrier at row 3, column 4, horizontal): ");
-    //     scanf(" %c %d %d %d", &shipType, &x, &y, &orientation);
-    //     x--;  // Convert to 0-based index
-    //     y--;
-
-    //     // Determine which ship to place
-    //     switch (shipType) {
-    //         case 'C': ship = &fleet2.carrier; break;
-    //         case 'B': ship = &fleet2.battleship; break;
-    //         case 'c': ship = &fleet2.cruiser; break;
-    //         case 's': ship = &fleet2.submarine; break;
-    //         case 'd': ship = &fleet2.destroyer; break;
-    //         default: 
-    //             printf("Invalid ship type. Try again.\n");
-    //             i--;  // Repeat this step
-    //             continue;
-    //     }
-
-    //     // Place the ship and check for valid placement
-    //     if (placeShip(grid2, ship, x, y, orientation) == 0) {
-    //         printf("Ship placed successfully.\n");
-    //         printGrid(grid2);
-    //     } else {
-    //         printf("Invalid placement. Try again.\n");
-    //         i--;  // Repeat this step
-    //     }
-    //}
-
-    placeShip(grid1, &fleet1.carrier, 0, 0, 0);     // Horizontal placement at top row
-    placeShip(grid1, &fleet1.battleship, 2, 0, 1);  // Vertical placement at column 0
-    placeShip(grid1, &fleet1.cruiser, 4, 4, 0);     // Horizontal in the middle
-    placeShip(grid1, &fleet1.submarine, 6, 6, 1);   // Vertical towards bottom
-    placeShip(grid1, &fleet1.destroyer, 8, 3, 0);   // Horizontal near bottom
-    for(int i = 0; i<5; i++ ){
+        // Place the ship and check for valid placement
+        if (placeShip(grid1, ship, x, y, orientation) == 0) {
+            printf("Ship placed successfully.\n");
+            printGrid(grid1);
+        } else {
+            printf("Invalid placement. Try again.\n");
+            i--;  // Repeat this step
+        }
+    }
+   for(int i = 0; i<5; i++ ){
         placedShips[i] = 'N';
     }
-    placeShip(grid2, &fleet2.carrier, 1, 1, 0);     // Opponent's Carrier
-    placeShip(grid2, &fleet2.battleship, 3, 1, 1);  // Opponent's Battleship
-    placeShip(grid2, &fleet2.cruiser, 5, 5, 0);     // Opponent's Cruiser
-    placeShip(grid2, &fleet2.submarine, 7, 7, 1);   // Opponent's Submarine
-    placeShip(grid2, &fleet2.destroyer, 9, 4, 0);   // Opponent's Destroyer
+    printf("Player 2:\n");
+    char input[20];
+    for (int i = 0; i < 4; i++) {  // 4 ships per player based on your requirements
+    printf("Place a ship (e.g., C 3 4 0 for Carrier at row 3, column 4, horizontal): ");
+    fgets(input, sizeof(input), stdin);
+    if (sscanf(input, " %c %d %d %d", &shipType, &x, &y, &orientation) != 4) {
+        printf("Invalid input. Try again.\n");
+        i--;
+        continue;
+    }
+    x--;  // Convert to 0-based index
+    y--;
 
+        // Determine which ship to place
+        switch (shipType) {
+            case 'C': ship = &fleet2.carrier; break;
+            case 'B': ship = &fleet2.battleship; break;
+            case 'S': ship = &fleet2.submarine; break;
+            case 'D': ship = &fleet2.destroyer; break;
+            default: 
+                printf("Invalid ship type. Try again.\n");
+                i--;  // Repeat this step
+                continue;
+        }
 
-
+        // Place the ship and check for valid placement
+        if (placeShip(grid2, ship, x, y, orientation) == 0) {
+            printf("Ship placed successfully.\n");
+            printGrid(grid2);
+        } else {
+            printf("Invalid placement. Try again.\n");
+            i--;  // Repeat this step
+        }
+    }
+    
     // Now, it is time to start the game
     // Program decides randomly whom to go first
     srand(time(NULL));
     
     int turn = rand() % 2 + 1;
-    char* command;
+    char command[10];
     char pos;
-    int col,row; 
+    int row, col;
+    Fleet *currentFleet, *opposingFleet;
+    int radarUses1 = 0, radarUses2 = 0;
+    int smokeScreens1 = 0, smokeScreens2 = 0;
+    int *radarUses = (turn == 1) ? &radarUses1 : &radarUses2;
+    int *smokeScreens = (turn == 1) ? &smokeScreens1 : &smokeScreens2; 
+    
     while(fleet1.shipsDestroyed != 5 && fleet2.shipsDestroyed != 5){
         char (*grid)[GRID_SIZE];
         char (*oppositeGrid)[GRID_SIZE];
         if (turn == 1) {
             grid = grid1;
             oppositeGrid = grid2;
+            currentFleet = &fleet1;
+            opposingFleet = &fleet2;
+            strcpy(currentPlayerName, "Player 1");
+            strcpy(opponentPlayerName, "Player 2");
         } else {
             grid = grid2;
             oppositeGrid = grid1;
+            currentFleet = &fleet2;
+            opposingFleet = &fleet1;
+            strcpy(currentPlayerName, "Player 2");
+            strcpy(opponentPlayerName, "Player 1");
         }
 
 
 
         printf("Player %d to move:\n",turn);
-        fleet1.shipsDestroyed++;
         //displayGrids(turn, grid1, grid2, grid1for2, grid2for1);
+        char (*oppositeViewGrid)[GRID_SIZE];
 
-        do { // Checking if command is correct
-            printf("Enter your command (e.g., Fire A5): ");
-            scanf("%s %c %d", command, &pos, &row);
-            if (!isValidCommand(command, pos, row,oppositeGrid)) {
-                printf("Invalid command! Try again!\n");
+    do {
+        printf("Enter your command (e.g., Fire A5): ");
+        // Read the input
+        if (fgets(input, sizeof(input), stdin)) {
+            // Trim newline character if present
+            input[strcspn(input, "\n")] = 0;
+            // Parse the command, column (pos), and row
+            if (sscanf(input, "%s %c%d", command, &pos, &row) != 3) {
+            printf("Invalid format! Please use the format <Command> <Column><Row> (e.g., Fire A5)\n");
+            continue;
             }
-        } while (!isValidCommand(command, pos, row,oppositeGrid));
-        col = pos - 'A';
-        printf("%c",&oppositeGrid[row][col]);
-        // if( strcmp(command,"Fire")==0 ) {
-        //     printf("Firing!\n");
-        //     Fire(oppositeGrid,1,row,col);
-        // }
+            // Convert column to uppercase for consistency
+            pos = toupper(pos);
+            // Validate the command
+           if (!isValidCommand(command, pos, row, oppositeViewGrid)) {
+                printf("Invalid command! Try again.\n");
+                continue;
+            }else {
+            break;  // Exit loop if the command is valid
+            }
+        } else {
+        printf("Error reading input. Try again.\n");
+        continue;
+        }
+    } while (1);
+
+// Convert row and column to zero-based index
+col = pos - 'A';
+row--;  // Convert to 0-based index
 
 
-        
-        
-        if(turn==1){
-            turn=2;
-        }else{turn=1;}
+//Executing the available commands/moves
+if (strcmp(command, "Fire") == 0) {
+    FireResult result = Fire(oppositeGrid, oppositeViewGrid, opposingFleet, currentFleet, row, col);
+    switch (result) {
+        case HIT:
+            printf("Great shot, %s! Keep going.\n", currentPlayerName);
+            break;
+        case MISS:
+            printf("Missed! Better luck next time, %s.\n", currentPlayerName);
+            break;
+        case SUNK:
+            printf("You sunk one of %s's ships!\n", opponentPlayerName);
+            break;
+        case INVALID:
+            printf("Invalid move. Turn skipped.\n");
+            break; // Skip the rest of this turn
+}
+        } else if (strcmp(command, "Artillery") == 0 && currentFleet->hasArtillery) {
+            ArtilleryResult result = Artillery(oppositeGrid, opposingFleet, row, col);
+            currentFleet->hasArtillery = 0; // Consume the special move
+            printf("Result: %d\n", result);
+        } else if (strcmp(command, "Torpedo") == 0 && currentFleet->hasTorpedo) {
+            TorpedoResult result = Torpedo(oppositeGrid, opposingFleet, pos);
+            currentFleet->hasTorpedo = 0; // Consume the special move
+            printf("Result: %d\n", result);
+        } else if (strcmp(command, "Smoke") == 0) {
+            SmokeScreenResult result = DeploySmokeScreen(NULL, NULL, row, col);
+            printf("Smoke Screen Deployment Result: %d\n", result);
+        } else if (strcmp(command, "Radar") == 0) {
+            int radarUses = 0;
+            RadarResult result = RadarSweep(oppositeGrid, 1, row, col, &radarUses, NULL, 0);
+            printf("Radar Sweep Result: %d\n", result);
+        } else {
+            printf("Invalid command or move not unlocked!\n");
+            continue;
+        }
+        // Check for game end
+        if (opposingFleet->shipsDestroyed == 4) {
+        printf("%s wins! All of %s's ships have been sunk.\n", currentPlayerName, opponentPlayerName);
+        break;
+        }
+        // Switch turns
+        turn = (turn == 1) ? 2 : 1;
+        // Clear screen for secrecy 
+        printf("Press Enter to end your turn...");
+        getchar(); 
+        clearScreen();
     }
 
     displayGrids(2, grid1, grid2, grid1for2, grid2for1);
-
     return 0;
 }
 
-// void Fire(char grid[GRID_SIZE][GRID_SIZE],int difficulty, int x,int y){
-//     if(difficulty == 1){
-//         if(grid[x][y] == '~'){
-//             grid[x][y] = 'm';
-//             printf("Missed!\n");
-//         }else{
-//             grid[x][y] = 'h';
-//             printf("Hit!\n");
-//         }
-//     }else{
+FireResult Fire(char opponentGrid[GRID_SIZE][GRID_SIZE], char viewGrid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, Fleet *currentFleet, int x, int y) {
+    char shipType = opponentGrid[x][y];  // Retrieve the type of the ship at the targeted cell
+    Ship *hitShip = getShipByType(opponentFleet, shipType);
 
-//     }
-
-// }
-
-FireResult Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int difficulty, int x, int y, SmokeScreen smokes[], int activeSmokeCount) {
-    // Validate if coordinates are within grid boundaries
+    // Validate coordinates
     if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
-        return INVALID;  // Invalid coordinates
+        printf("Invalid coordinates! You lose your turn.\n");
+        return INVALID;
     }
 
-    // Check if the cell has already been targeted
-    if (grid[x][y] == 'h' || grid[x][y] == 'm') {
-        if (difficulty == 1) { // Easy mode
-            printf("You've already targeted this spot. Try again.");
-            return INVALID;  // Prompt the player to try again
-            } else if (difficulty == 2) { // Hard mode
-            printf("You've already targeted this spot. You lose your turn.");
-            return MISS;  // Player loses the turn
-        }
+    // Check if the cell was already targeted in the player's view
+    if (viewGrid[x][y] == 'h' || viewGrid[x][y] == 'm') {
+        printf("This cell has already been targeted. You lose your turn.\n");
+        return INVALID;
     }
 
-    // Determine if the target is a hit or miss
-    if (grid[x][y] != '~' && grid[x][y] != 'h' && grid[x][y] != 'm') {
-        // It's a hit
-        printf("Hit!");
-        char shipType = grid[x][y];
-        grid[x][y] = 'h';  // Mark the cell as hit
+    // Handle hit or miss
+    if (opponentGrid[x][y] == '~') {
+        opponentGrid[x][y] = 'm';  // Mark as miss on opponent's grid
+        viewGrid[x][y] = 'm';      // Mark as miss on player's view
+        return MISS;
+    } else {
+        char shipType = opponentGrid[x][y];  // Get ship type
+        opponentGrid[x][y] = 'h';  // Mark as hit on opponent's grid
+        viewGrid[x][y] = 'h';      // Mark as hit on player's view
 
-        // Update the ship's hits count in the opponent's fleet
+        // Update ship status
         Ship *hitShip = getShipByType(opponentFleet, shipType);
-        if (hitShip == NULL) return INVALID;  // In case of an unexpected value
-
-        hitShip->hits++;
-
-        // Check if the ship is sunk
-        if (hitShip->hits == hitShip->size) {
-            printf("%s has been sunk!", getShipNameByType(shipType));
-            opponentFleet->shipsDestroyed++;
-            return SUNK;
+        if (hitShip) {
+            hitShip->hits++;
+            if (hitShip->hits == hitShip->size) {
+                printf("You sunk the %s!\n", getShipNameByType(shipType));
+                opponentFleet->shipsDestroyed++;
+                return SUNK;
+            }
         }
         return HIT;
-    } else {
-        // It's a miss
-        printf("Missed!");
-        if (difficulty == 1) { // In easy mode, mark misses
-            grid[x][y] = 'm';
-        }
-        return MISS;
     }
+    if (hitShip->hits == hitShip->size) {
+    printf("You sunk the %s!\n", getShipNameByType(shipType));
+    opponentFleet->shipsDestroyed++;
+
+    // Unlock Artillery for next turn
+    currentFleet->hasArtillery = 1;
+
+    // If the player has sunk three ships, unlock Torpedo
+    if (opponentFleet->shipsDestroyed == 3) {
+        currentFleet->hasTorpedo = 1;
+    }
+
+    return SUNK;
+    }
+
 }
-       
 
 RadarResult RadarSweep(char grid[GRID_SIZE][GRID_SIZE], int difficulty, int x, int y, int *radarUses, SmokeScreen smokes[], int activeSmokeCount) {
     // Check if the radar is being used in an area covered by smoke
@@ -316,7 +376,6 @@ RadarResult RadarSweep(char grid[GRID_SIZE][GRID_SIZE], int difficulty, int x, i
 }
 
 SmokeScreenResult DeploySmokeScreen(SmokeScreen smokes[], int *activeSmokeCount, int x, int y) {
-
     // Check if the player has available smoke screens to deploy
     if (*activeSmokeCount >= 2) {
         printf("Maximum smoke screens deployed. Cannot deploy more.\n");
@@ -360,49 +419,185 @@ Ship* getShipByType(Fleet *fleet, char shipType) {
     switch (shipType) {
         case 'C': return &fleet->carrier;
         case 'B': return &fleet->battleship;
-        case 'c': return &fleet->cruiser;
-        case 's': return &fleet->submarine;
-        case 'd': return &fleet->destroyer;
-        default: return NULL;  // Invalid ship type
+        case 'D': return &fleet->destroyer;
+        case 'S': return &fleet->submarine;
+        default: return NULL;
     }
 }
 
-// Helper function to find the name of the ship based on type
 const char* getShipNameByType(char type) {
     switch (type) {
         case 'C': return "Carrier";
         case 'B': return "Battleship";
-        case 'c': return "Cruiser";
-        case 's': return "Submarine";
-        case 'd': return "Destroyer";
+        case 'D': return "Destroyer";
+        case 'S': return "Submarine";
         default: return "Unknown Ship";
     }
 }
 
-
-
-// used for checking if a command is right
-int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]) {
-    return (
-        (strcmp(command, "Fire") == 0 ||
-         strcmp(command, "Smoke") == 0 ||
-         strcmp(command, "Radar") == 0 ||
-         strcmp(command, "Artillery") == 0 ||
-         strcmp(command, "Torpedo") == 0) &&
-        (pos >= 'A' && pos <= 'J') &&
-        (row >= 1 && row <= 10) && (grid[row][pos-'A'] != 'm') && (grid[row][pos-'A'] != 'h')
-    );
+ArtilleryResult Artillery(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, int x, int y) {
+    // Check if the given coordinate of the 2x2 is within grid boundaries
+    if (x < 0 || x >= GRID_SIZE - 1 || y < 0 || y >= GRID_SIZE - 1) {
+        return ARTILLERY_INVALID;
+    }
+    int hitCount = 0;  // Tracks the number of successful hits
+    // Looping through the 2x2
+    for (int i = x; i <= x + 1; i++) {
+        for (int j = y; j <= y + 1; j++) {
+            if (grid[i][j] == '~') {
+                grid[i][j] = 'm';  // The cell is an empty water; thus, is marked as miss
+            } else if (grid[i][j] != 'h' && grid[i][j] != 'm') {
+                grid[i][j] = 'h';  // The cell is part of a ship; thus, is marked as hit
+                hitCount++; 
+                // Retrieve ship's type and relate it back to opponent's fleet
+                Ship *hitShip = getShipByType(opponentFleet, grid[i][j]);
+                // Checks if the ship has been sunk
+                if (hitShip) {
+                    hitShip->hits++;
+                    if (hitShip->hits == hitShip->size) {
+                        printf("%s has been sunk!\n", getShipNameByType(grid[i][j]));
+                        opponentFleet->shipsDestroyed++; // Update fleet's destroyed ship count
+                    }
+                }
+            }
+        }
+    }
+    return hitCount > 0 ? ARTILLERY_HIT : ARTILLERY_MISS;
 }
 
+TorpedoResult Torpedo(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, char rowOrCol) {
+    // Determines if the user wants to target a row or column based on inpute
+    int index = (rowOrCol >= 'A' && rowOrCol <= 'J') ? rowOrCol - 'A' : rowOrCol - '1';
+    // Checks that the index is within grid boundaries
+    if (index < 0 || index >= GRID_SIZE) {
+        return TORPEDO_INVALID;
+    }
+    int hitCount = 0;
+    // Loop over target row or column based on index
+    for (int i = 0; i < GRID_SIZE; i++) {
+        // For column targets:
+        if (rowOrCol >= 'A' && rowOrCol <= 'J') {
+            if (grid[i][index] == '~') {
+                grid[i][index] = 'm';
+            } else if (grid[i][index] != 'h' && grid[i][index] != 'm') {
+                grid[i][index] = 'h';
+                hitCount++;
+                Ship *hitShip = getShipByType(opponentFleet, grid[i][index]);
+                if (hitShip) {
+                    hitShip->hits++;
+                    if (hitShip->hits == hitShip->size) {
+                        printf("%s has been sunk!\n", getShipNameByType(grid[i][index]));
+                        opponentFleet->shipsDestroyed++;
+                    }
+                }
+            }
+        } else {
+            // For row targets:
+            if (grid[index][i] == '~') {
+                grid[index][i] = 'm';
+            } else if (grid[index][i] != 'h' && grid[index][i] != 'm') {
+                grid[index][i] = 'h';
+                hitCount++;
+                Ship *hitShip = getShipByType(opponentFleet, grid[index][i]);
+                if (hitShip) {
+                    hitShip->hits++; 
+                    if (hitShip->hits == hitShip->size) {
+                        printf("%s has been sunk!\n", getShipNameByType(grid[index][i]));
+                        opponentFleet->shipsDestroyed++;  // Update fleet's destroyed ship
+                    }
+                }
+            }
+        }
+    }
+
+    return hitCount > 0 ? TORPEDO_HIT : TORPEDO_MISS;
+}
+
+TorpedoResult Torpedo(char grid[GRID_SIZE][GRID_SIZE], Fleet *opponentFleet, char rowOrCol) {
+    // Determines if the user wants to target a row or column based on inpute
+    int index = (rowOrCol >= 'A' && rowOrCol <= 'J') ? rowOrCol - 'A' : rowOrCol - '1';
+    // Checks that the index is within grid boundaries
+    if (index < 0 || index >= GRID_SIZE) {
+        return TORPEDO_INVALID;
+    }
+    int hitCount = 0;
+    // Loop over target row or column based on index
+    for (int i = 0; i < GRID_SIZE; i++) {
+        // For column targets:
+        if (rowOrCol >= 'A' && rowOrCol <= 'J') {
+            if (grid[i][index] == '~') {
+                grid[i][index] = 'm';
+            } else if (grid[i][index] != 'h' && grid[i][index] != 'm') {
+                grid[i][index] = 'h';
+                hitCount++;
+                Ship *hitShip = getShipByType(opponentFleet, grid[i][index]);
+                if (hitShip) {
+                    hitShip->hits++;
+                    if (hitShip->hits == hitShip->size) {
+                        printf("%s has been sunk!\n", getShipNameByType(grid[i][index]));
+                        opponentFleet->shipsDestroyed++;
+                    }
+                }
+            }
+        } else {
+            // For row targets:
+            if (grid[index][i] == '~') {
+                grid[index][i] = 'm';
+            } else if (grid[index][i] != 'h' && grid[index][i] != 'm') {
+                grid[index][i] = 'h';
+                hitCount++;
+                Ship *hitShip = getShipByType(opponentFleet, grid[index][i]);
+                if (hitShip) {
+                    hitShip->hits++; 
+                    if (hitShip->hits == hitShip->size) {
+                        printf("%s has been sunk!\n", getShipNameByType(grid[index][i]));
+                        opponentFleet->shipsDestroyed++;  // Update fleet's destroyed ship
+                    }
+                }
+            }
+        }
+    }
+
+    return hitCount > 0 ? TORPEDO_HIT : TORPEDO_MISS;
+}
+
+// used for checking if a command is right
+int isValidCommand(const char *command, char pos, int row, char grid[GRID_SIZE][GRID_SIZE]) {
+    // Ensure the command is one of the recognized commands
+    if (!(strcmp(command, "Fire") == 0 ||
+          strcmp(command, "Smoke") == 0 ||
+          strcmp(command, "Radar") == 0 ||
+          strcmp(command, "Artillery") == 0 ||
+          strcmp(command, "Torpedo") == 0)) {
+        return 0; // Invalid command
+    }
+
+    // Check if the coordinates are within grid bounds
+    if (pos < 'A' || pos > 'J' || row < 1 || row > GRID_SIZE) {
+        return 0; // Out of bounds
+    }
+
+    // Convert row and column to zero-based indices
+    int col = pos - 'A';
+    int x = row - 1;
+
+    // Use player's view of the opponent's grid
+    if (grid[x][col] == 'h' || grid[x][col] == 'm') {
+        return 0; // Cell already targeted
+    }
+
+    return 1; // Valid command
+}
 
 // Initialize each fleet with its ships and sizes
 void initializeFleet(Fleet *fleet) {
     fleet->carrier = (Ship){'C', 5, 0};
     fleet->battleship = (Ship){'B', 4, 0};
-    fleet->cruiser = (Ship){'c', 3, 0};
-    fleet->submarine = (Ship){'s', 3, 0};
-    fleet->destroyer = (Ship){'d', 2, 0};
+    fleet->submarine = (Ship){'S', 3, 0};
+    fleet->destroyer = (Ship){'D', 2, 0};
     fleet->shipsDestroyed = 0;
+    fleet->hasArtillery = 0;
+    fleet->hasTorpedo = 0;
 }
 
 // Initialize the grid with '~' for water
@@ -484,17 +679,24 @@ int placeShip(char grid[GRID_SIZE][GRID_SIZE], Ship *ship, int x, int y, int ori
 // be able to see his own grid
 // and his opponent's grid
 // with prev Ms and Hs
+
 void displayGrids(int turn, char grid1[GRID_SIZE][GRID_SIZE], char grid2[GRID_SIZE][GRID_SIZE], char grid1for2[GRID_SIZE][GRID_SIZE], char grid2for1[GRID_SIZE][GRID_SIZE]){
-    // it's first Player's turn to hit
     if(turn == 1){
-        printf("Here is your grid: \n");
+        printf("Your own grid:\n");
         printGrid(grid1);
-        printf("Here is Player 2's grid: \n");
+        printf("Your view of opponent's grid:\n");
         printGrid(grid2for1);
     }else{
-        printf("Here is your grid: \n");
+        printf("Your own grid:\n");
         printGrid(grid2);
-        printf("Here is Player 1's grid: \n");
+        printf("Your view of opponent's grid:\n");
         printGrid(grid1for2);
     }
+}
+void clearScreen() {
+    #ifdef _WIN32
+    system("cls");  // Windows system command to clear the screen
+    #else
+    system("clear");  // Unix-based system command to clear the screen
+    #endif
 }
