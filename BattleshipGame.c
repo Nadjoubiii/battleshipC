@@ -33,7 +33,20 @@ void initializeFleet(Fleet *fleet);
 int placeShip(char grid[GRID_SIZE][GRID_SIZE], Ship *ship, int x, int y, int orientation);
 void displayGrids(int turn, char grid1[GRID_SIZE][GRID_SIZE], char grid2[GRID_SIZE][GRID_SIZE], char grid1for2[GRID_SIZE][GRID_SIZE], char grid2for1[GRID_SIZE][GRID_SIZE]);
 int isValidCommand(const char *command, char pos, int row,char grid[GRID_SIZE][GRID_SIZE]);
+
+// Gameplay commands
 void Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, int x, int y);
+// void radarSweep(char grid[10][10], Fleet *fleet, int *radarUses, int x, int y);
+// void smokeScreen(char grid[10][10],Fleet* fleet, int *allowedSmokeScreens, int x, int y);
+void Artillery(char grid[10][10],Fleet* fleet, int x, int y);
+void Torpedo(char grid[10][10],Fleet* fleet, int col);
+// End of Gameplay Commands
+
+
+// Semi-Heuristic easy mode AI
+
+
+
 
 int main() {
     char grid1[GRID_SIZE][GRID_SIZE];
@@ -157,10 +170,7 @@ int main() {
         } else {
             grid = grid2;
             oppositeGrid = grid1;
-        }
- 
-
-
+        } 
         printf("Player %d to move:\n",turn);
         Fleet *opponentFleet = turn == 1 ? &fleet2 : &fleet1;
         //displayGrids(turn, grid1, grid2, grid1for2, grid2for1);
@@ -176,30 +186,92 @@ int main() {
         printf("%c",&oppositeGrid[row][col]);
         if( strcmp(command,"Fire")==0 ) {
             printf("Firing!\n");
-            Fire(oppositeGrid, opponentFleet, row - 1, col);
-            
+            Fire(oppositeGrid, opponentFleet, row - 1, col);  
         }
-
-
+        if( strcmp(command,"Radar")==0 ) {
+            printf("Radar!\n");
+            Fire(oppositeGrid, opponentFleet, row - 1, col);  
+        }
+        if( strcmp(command,"Smoke")==0 ) {
+            printf("Smoke!\n");
+            Fire(oppositeGrid, opponentFleet, row - 1, col);  
+        }
+        if( strcmp(command,"Artillery")==0 ) {
+            printf("Artillery!\n");
+            Artillery(oppositeGrid, opponentFleet, row - 1, col);  
+        }
+        if( strcmp(command,"Torpedo")==0 ) {
+            printf("Torpedo!\n");
+            Torpedo(oppositeGrid, opponentFleet, col);  
+        }
         // switch turns
         if(turn==1){
             turn=2;
         }else{turn=1;}
-
-
-         if (fleet1.shipsDestroyed == 5) {
+        if (fleet1.shipsDestroyed == 5) {
         printf("Player 2 wins!\n");
         } else if (fleet2.shipsDestroyed == 5) {
             printf("Player 1 wins!\n");
         }
     }
-
     displayGrids(2, grid1, grid2, grid1for2, grid2for1);
-
     return 0;
 }
 
+
+
+// The Gameplay Commands
+
+void Artillery(char grid[10][10], Fleet* fleet , int x, int y) {
+    printf("Artillery attack on area (%c%d, %c%d, %c%d, %c%d)\n",
+           'A' + x, y + 1, 'A' + x, y + 2, 'A' + x + 1, y + 1, 'A' + x + 1, y + 2);
+    for (int i = x; i < x + 2 && i < 10; i++) {
+        for (int j = y; j < y + 2 && j < 10; j++) {
+            Fire(grid, fleet, i, j); // Use the Fire command on each cell
+        }
+    }
+}
+
+void Torpedo(char grid[10][10],Fleet* fleet, int col) {
+    printf("Torpedo attack on col %c\n", col + 'A');
+    for (int j = 0; j < 10; j++) {
+        Fire(grid,fleet,j, col);
+    }
+}
+
+
+// void radarSweep(char grid[10][10], int *radarUses, int x, int y) {
+//     if (*radarUses >= 3) {
+//         printf("Radar Sweep limit reached. You lose your turn.\n");
+//         return;
+//     }
+    
+//     (*radarUses)++;
+//     bool found = false;
+
+//     for (int i = x; i < x + 2 && i < 10; i++) {
+//         for (int j = y; j < y + 2 && j < 10; j++) {
+//             if (grid[i][j] == 'S') { // Assuming 'S' marks a ship
+//                 found = true;
+//                 break;
+//             }
+//         }
+//         if (found) break;
+//     }
+
+//     if (found)
+//         printf("Enemy ships found.\n");
+//     else
+//         printf("No enemy ships found.\n");
+// }
+
+
 void Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, int x, int y) {
+    if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) {
+    printf("Invalid coordinates!\n");
+    return;
+    }
+
     if (grid[x][y] == '~') {
         grid[x][y] = 'm';
         printf("Missed!\n");
@@ -220,6 +292,9 @@ void Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, int x, int y) {
     }
 
 }
+
+
+// End of Gameplay Commands
 
 // int checkAndDestroyShip(char grid[10][10], Fleet *fleet) {
 //     int destroyedCount = 0; // Tracks the number of ships destroyed during this call
@@ -327,6 +402,17 @@ int isPlaced(Ship *ship){
 
 // Place a ship on the grid based on coordinates and orientation
 int placeShip(char grid[GRID_SIZE][GRID_SIZE], Ship *ship, int x, int y, int orientation) {
+
+    for (int i = 0; i < ship->size; i++) {
+        if (orientation == 0 && grid[x][y + i] != '~'){ 
+            printf("Ships overlapping try again!\n");
+            return -1;
+            }
+        if (orientation == 1 && grid[x + i][y] != '~'){
+            printf("Ships overlapping try again!\n");
+            return -1;
+        } 
+    }
     // Check bounds and availability of cells
     if (orientation == 0) {  // Horizontal placement
         if (y + ship->size > GRID_SIZE) return -1;  // Out of bounds
