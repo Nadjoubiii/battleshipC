@@ -44,6 +44,14 @@ void Torpedo(char grid[10][10],Fleet* fleet, int col);
 
 
 // Semi-Heuristic easy mode AI
+typedef struct {
+    int x, y;  // Coordinates of the last hit
+    int isHit;  // If the AI has hit a ship
+    int direction; // 0 for vertical, 1 for horizontal, -1 if none
+} AITarget;
+
+void initAITarget(AITarget *aiTarget);
+void aiTurn(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, AITarget *aiTarget);
 
 
 
@@ -73,7 +81,7 @@ int main() {
     
     printf("Enter ship type (C for Carrier, B for Battleship, c for Cruiser, s for Submarine, d for Destroyer), coordinates (row and column), and orientation (0 for horizontal, 1 for vertical):\n");
 
-
+#pragma region deprec
     /* This is working but mothballed for testing purpoeses */
     // for (int i = 0; i < 5; i++) {  // 5 ships per player
     //     printf("Place a ship (e.g., C 3 4 0 for Carrier at row 3, column 4, horizontal): ");
@@ -136,6 +144,12 @@ int main() {
     //     }
     //}
 
+
+#pragma endregion deprec
+
+
+
+#pragma region init
     placeShip(grid1, &fleet1.carrier, 0, 0, 0);     // Horizontal placement at top row
     placeShip(grid1, &fleet1.battleship, 2, 0, 1);  // Vertical placement at column 0
     placeShip(grid1, &fleet1.cruiser, 4, 4, 0);     // Horizontal in the middle
@@ -151,30 +165,50 @@ int main() {
     placeShip(grid2, &fleet2.destroyer, 9, 4, 0);   // Opponent's Destroyer
 
 
-
+#pragma endregion init
     // Now, it is time to start the game
     // Program decides randomly whom to go first
-    srand(time(NULL));
+
+    AITarget aiTarget1, aiTarget2;
+    initAITarget(&aiTarget1);
+    initAITarget(&aiTarget2);
     
+    srand(time(NULL));
     int turn = rand() % 2 + 1;
+
     while(fleet1.shipsDestroyed != 5 && fleet2.shipsDestroyed != 5){
         char command[16];
         char pos;
         int col,row; 
-        
+        Fleet *opponentFleet;
+        AITarget *aiTarget;
         char (*grid)[GRID_SIZE];
         char (*oppositeGrid)[GRID_SIZE];
+
         if (turn == 1) {
             grid = grid1;
             oppositeGrid = grid2;
+            opponentFleet = &fleet2;
+            aiTarget = &aiTarget2; 
+
         } else {
             grid = grid2;
             oppositeGrid = grid1;
+            opponentFleet = &fleet1;
+            aiTarget = &aiTarget1; 
         } 
-        printf("Player %d to move:\n",turn);
-        Fleet *opponentFleet = turn == 1 ? &fleet2 : &fleet1;
-        //displayGrids(turn, grid1, grid2, grid1for2, grid2for1);
 
+
+        printf("Player %d to move:\n",turn);
+
+        //displayGrids(turn, grid1, grid2, grid1for2, grid2for1);
+        if (turn == 2) {
+            // AI's turn to move
+                aiTurn(oppositeGrid, opponentFleet, aiTarget);
+                turn = 1;
+        }
+
+        else{ // Player's turn to play
         do { // Checking if command is correct
             printf("Enter your command (e.g., Fire A5): ");
             scanf("%s %c %d", command, &pos, &row);
@@ -204,10 +238,15 @@ int main() {
             printf("Torpedo!\n");
             Torpedo(oppositeGrid, opponentFleet, col);  
         }
-        // switch turns
-        if(turn==1){
             turn=2;
-        }else{turn=1;}
+        }
+
+        // // switch turns
+        // if(turn==1){
+            
+        // }else{turn=1;}
+
+        // Game overcheck
         if (fleet1.shipsDestroyed == 5) {
         printf("Player 2 wins!\n");
         } else if (fleet2.shipsDestroyed == 5) {
@@ -219,11 +258,11 @@ int main() {
 }
 
 
-
+#pragma region commands
 // The Gameplay Commands
 
 void Artillery(char grid[10][10], Fleet* fleet , int x, int y) {
-    printf("Artillery attack on area (%c%d, %c%d, %c%d, %c%d)\n",
+    printf("Artillery attack ongoing:\n",
            'A' + x, y + 1, 'A' + x, y + 2, 'A' + x + 1, y + 1, 'A' + x + 1, y + 2);
     for (int i = x; i < x + 2 && i < 10; i++) {
         for (int j = y; j < y + 2 && j < 10; j++) {
@@ -293,41 +332,70 @@ void Fire(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, int x, int y) {
 
 }
 
-
 // End of Gameplay Commands
+#pragma endregion commands
 
-// int checkAndDestroyShip(char grid[10][10], Fleet *fleet) {
-//     int destroyedCount = 0; // Tracks the number of ships destroyed during this call
 
-//     for (int i = 0; i < 5; i++) {
-//         Ship *ship = &fleet->ships[i];
-        
-//         if (ship->) {
-//             // Skip already destroyed ships
-//             continue;
-//         }
 
-//         // Check each part of the ship
-//         for (int j = 0; j < ship->length; j++) {
-//             int row = ship->isHorizontal ? ship->startRow : ship->startRow + j;
-//             int col = ship->isHorizontal ? ship->startCol + j : ship->startCol;
 
-//             // Count hits ('X') on the ship
-//             if (grid[row][col] == 'X') {
-//                 ship->hitCount++;
-//             }
-//         }
 
-//         // Destroy the ship if all parts are hit
-//         if (ship->hitCount == ship->length) {
-//             ship->isDestroyed = true;  // Mark as destroyed
-//             fleet->shipsDestroyed++;  // Increment the total destroyed counter
-//             destroyedCount++;         // Increment the local counter
-//         }
-//     }
+//Easy Mode Semi-Heuristic AI methods
+void initAITarget(AITarget *aiTarget) {
+    aiTarget->isHit = 0;
+    aiTarget->direction = -1;  // No direction yet
+}
+void aiTurn(char grid[GRID_SIZE][GRID_SIZE], Fleet *fleet, AITarget *aiTarget) {
+    int x, y;
 
-//     return destroyedCount; // Return the number of ships destroyed
-// }
+    if (aiTarget->isHit != 0) {
+        // Targeting the ship in the direction of the last hit (either vertical or horizontal)
+        if (aiTarget->direction == 0) {
+            // Vertical search: Try up and down
+            x = aiTarget->x;
+            y = aiTarget->y + 1; // Down
+            if (y < GRID_SIZE && grid[x][y] != 'h' && grid[x][y] != 'm') {
+                Fire(grid, fleet, x, y);
+                return;
+            }
+            y = aiTarget->y - 1; // Up
+            if (y >= 0 && grid[x][y] != 'h' && grid[x][y] != 'm') {
+                Fire(grid, fleet, x, y);
+                return;
+            }
+        } else if (aiTarget->direction == 1) {
+            // Horizontal search: Try left and right
+            x = aiTarget->x + 1; // Right
+            y = aiTarget->y;
+            if (x < GRID_SIZE && grid[x][y] != 'h' && grid[x][y] != 'm') {
+                Fire(grid, fleet, x, y);
+                return;
+            }
+            x = aiTarget->x - 1; // Left
+            if (x >= 0 && grid[x][y] != 'h' && grid[x][y] != 'm') {
+                Fire(grid, fleet, x, y);
+                return;
+            }
+        }
+    }
+
+    // If no hit or no direction yet, fire randomly
+    do {
+        x = rand() % GRID_SIZE;
+        y = rand() % GRID_SIZE;
+    } while (grid[x][y] == 'm' || grid[x][y] == 'h');  // Skip already hit or missed spots
+
+    Fire(grid, fleet, x, y);
+    printf("AI fires at %c%d\n", 'A' + x, y + 1);  // Display AI's fire location
+
+    // Update AI's last hit position and direction if a hit is confirmed
+    if (grid[x][y] == 'h') {
+        aiTarget->x = x;
+        aiTarget->y = y;
+        aiTarget->isHit = 1 ;
+        aiTarget->direction = rand() % 2;  // Randomly choose a direction (vertical or horizontal)
+    }
+}
+
 
 
 
