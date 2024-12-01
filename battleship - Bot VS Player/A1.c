@@ -102,8 +102,8 @@ void initializeFleet(Fleet *fleet) {
     fleet->submarine = (Ship){'s', 3, 0};
     fleet->destroyer = (Ship){'d', 2, 0};
     fleet->shipsDestroyed = 0;
-    fleet->artilleryUnlocked = 0;
-    fleet->torpedoUnlocked = 0;
+    fleet->artilleryUnlocked = 1;
+    fleet->torpedoUnlocked = 1;
 }
 
 // Places a ship on the grid
@@ -463,14 +463,29 @@ int main() {
                 } else {
                     printf("Invalid target! Use a format like 'A5'.\n");
                 }
-            } else {
+            }else if (strcmp(command, "Torpedo") == 0) {
+                if (isalpha(target[0]) && isdigit(target[1])) {
+                    char col = target[0];
+                    if (col >= 'A' && col <= 'J') {
+                        validCommand = 1;
+                        Torpedo(oppositeGrid, opponentFleet, col - 'A');
+                    } else {
+                        printf("Invalid column! Use A-J for columns.\n");
+                    }
+                } else if (isdigit(target[0]) && atoi(target) >= 1 && atoi(target) <= 10) {
+                    int row = atoi(target);
+                    validCommand = 1;
+                    Torpedo(oppositeGrid, opponentFleet, row - 1);
+                } else {
+                    printf("Invalid target for Torpedo! Use a column (A-J) or row (1-10).\n");
+                }
+            }else {
                 printf("Unknown command '%s'. Available commands: Fire, Artillery, Radar, Smoke.\n", command);
             }
-        }
 
         UpdateSmokeScreens(activeSmokes, activeSmokeCount);
         turn = (turn == 1) ? 2 : 1;
-    }
+        }
 
     if (fleet1.shipsDestroyed == 5) {
         printf("Player 2 wins!\n");
@@ -479,4 +494,5 @@ int main() {
     }
 
     return 0;
+    }
 }
