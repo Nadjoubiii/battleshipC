@@ -535,6 +535,7 @@ int main() {
         char target[4] = {0};
         int validCommand = 0;
 
+        int shipsDestroyed;
         Fleet *opponentFleet = (turn == 1) ? &fleet2 : &fleet1;
         char (*oppositeGrid)[GRID_SIZE] = (turn == 1) ? grid2 : grid1;
         char (*playerGrid)[GRID_SIZE] = (turn == 1) ? grid1 : grid2;
@@ -592,7 +593,7 @@ int main() {
             validCommand = 1;
             if (strcmp(command, "Fire") == 0) {
                 
-                Fire(oppositeGrid, opponentFleet, row - 1, col - 'A',0);
+                Fire(oppositeGrid, opponentFleet, row - 1, col - 'A', &shipsDestroyed);
             } else if (opponentFleet->artilleryUnlocked) {
                 Artillery(oppositeGrid, opponentFleet, row - 1, col - 'A');
             } else {
